@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calculadora de Extras Militares</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: center;
+    }
+    select, input[type=number] {
+      width: 100%;
+    }
+    .resultados {
+      margin-top: 20px;
+    }
+    nav {
+      margin-bottom: 20px;
+    }
+    nav a {
+      margin-right: 10px;
+      text-decoration: none;
+      color: blue;
+    }
+    .fixar-container {
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="#" onclick="mostrarCalculadora()">Calculadora</a>
+    <a href="#" onclick="mostrarValores()">Valores</a>
+  </nav>
+
+  <div id="calculadora">
+    <h1>Calculadora de Extras</h1>
+    <label for="mes">Selecione o mês:</label>
+    <input type="month" id="mes" onchange="gerarTabela()">
+
+    <div class="fixar-container">
+      <label for="postoFixo">Posto fixo para todos os dias:</label>
+      <select id="postoFixo" onchange="aplicarPostoFixo()">
+        <option value="">-- Não fixar --</option>
+      </select>
+    </div>
+
+    <table id="tabelaExtras">
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Dia da Semana</th>
+          <th>Qtd. Extras</th>
+          <th>Posto</th>
+          <th>Majorar Dia?</th>
+          <th>Valor Unitário</th>
+          <th>Total Diário</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Linhas serão geradas dinamicamente -->
+      </tbody>
+    </table>
+
+    <button onclick="calcularExtras()">Calcular Valores</button>
+
+    <div class="resultados">
+      <p><strong>Total Geral: R$ <span id="totalGeral">0,00</span></strong></p>
+    </div>
+  </div>
+
+  <div id="valores" style="display:none">
+    <h2>Tabela de Valores por Posto</h2>
+    <pre id="tabelaValores">
+    const VALORES = {
+      "SD": { normal: 316.8, majorado: 411.84 },
+      "CB": { normal: 348.48, majorado: 453.12 },
+      "3º SGT": { normal: 383.28, majorado: 498.24 },
+      "2º SGT": { normal: 421.68, majorado: 548.16 },
+      "1º SGT": { normal: 463.92, majorado: 602.88 },
+      "ST": { normal: 510.24, majorado: 663.36 },
+      "ASP": { normal: 561.12, majorado: 729.6 },
+      "2º TEN": { normal: 617.28, majorado: 802.56 },
+      "1º TEN": { normal: 679.2, majorado: 882.72 },
+      "CAP": { normal: 746.88, majorado: 971.04 },
+      "MAJ": { normal: 821.76, majorado: 1068.24 },
+      "TC": { normal: 903.84, majorado: 1175.04 },
+      "CEL": { normal: 1129.92, majorado: 1468.8 }
+    };
+    </pre>
+  </div>
+
+  <script>
+    const VALORES = {
+      "SD": { normal: 316.8, majorado: 411.84 },
+      "CB": { normal: 348.48, majorado: 453.12 },
+      "3º SGT": { normal: 383.28, majorado: 498.24 },
+      "2º SGT": { normal: 421.68, majorado: 548.16 },
+      "1º SGT": { normal: 463.92, majorado: 602.88 },
+      "ST": { normal: 510.24, majorado: 663.36 },
+      "ASP": { normal: 561.12, majorado: 729.6 },
+      "2º TEN": { normal: 617.28, majorado: 802.56 },
+      "1º TEN": { normal: 679.2, majorado: 882.72 },
+      "CAP": { normal: 746.88, majorado: 971.04 },
+      "MAJ": { normal: 821.76, majorado: 1068.24 },
+      "TC": { normal: 903.84, majorado: 1175.04 },
+      "CEL": { normal: 1129.92, majorado: 1468.8 }
+    };
+
+    function gerarTabela() {
+      const mes = document.getElementById("mes").value;
+      if (!mes) return;
+
+      const [ano, mesNum] = mes.split("-");
+      const ultimoDia = new Date(ano, mesNum, 0).getDate();
+      const tbody = document.querySelector("#tabelaExtras tbody");
+      tbody.innerHTML = "";
+
+      const postoFixoSelect = document.getElementById("postoFixo");
+      postoFixoSelect.innerHTML = '<option value="">-- Não fixar --</option>';
+      Object.keys(VALORES).forEach(p => {
+        const opt = document.createElement("option");
+        opt.value = p;
+        opt.textContent = p;
+        postoFixoSelect.appendChild(opt);
+      });
+
+      for (let dia = 10; dia <= ultimoDia; dia++) {
+        const data = new Date(ano, mesNum - 1, dia);
+        const diaSemana = data.toLocaleDateString('pt-BR', { weekday: 'long' });
+
+        const linha = document.createElement("tr");
+        linha.innerHTML = `
+          <td>${data.toLocaleDateString()}</td>
+          <td>${diaSemana}</td>
+          <td><input type="number" min="0" value="0" class="qtdExtras"></td>
+          <td>
+            <select class="posto">
+              ${Object.keys(VALORES).map(p => `<option value="${p}">${p}</option>`).join('')}
+            </select>
+          </td>
+          <td><input type="checkbox" class="majorarDia"></td>
+          <td class="valorUnitario">-</td>
+          <td class="totalDia">-</td>
+        `;
+        tbody.appendChild(linha);
+      }
+    }
+
+    function aplicarPostoFixo() {
+      const valorSelecionado = document.getElementById("postoFixo").value;
+      if (!valorSelecionado) return;
+      document.querySelectorAll("select.posto").forEach(select => {
+        select.value = valorSelecionado;
+      });
+    }
+
+    function calcularExtras() {
+      const linhas = document.querySelectorAll("#tabelaExtras tbody tr");
+      let totalGeral = 0;
+
+      linhas.forEach(linha => {
+        const qtd = parseInt(linha.querySelector(".qtdExtras").value) || 0;
+        const posto = linha.querySelector(".posto").value;
+        const isMajorado = linha.querySelector(".majorarDia").checked;
+        const diaSemana = linha.cells[1].innerText;
+
+        const isFds = diaSemana.includes("sábado") || diaSemana.includes("domingo");
+        const usarMajorado = isFds || isMajorado;
+
+        const valorUnitario = usarMajorado ? VALORES[posto].majorado : VALORES[posto].normal;
+        const totalDia = valorUnitario * qtd;
+
+        linha.querySelector(".valorUnitario").innerText = `R$ ${valorUnitario.toFixed(2)}`;
+        linha.querySelector(".totalDia").innerText = `R$ ${totalDia.toFixed(2)}`;
+
+        totalGeral += totalDia;
+      });
+
+      document.getElementById("totalGeral").innerText = totalGeral.toFixed(2);
+    }
+
+    function mostrarCalculadora() {
+      document.getElementById("calculadora").style.display = 'block';
+      document.getElementById("valores").style.display = 'none';
+    }
+
+    function mostrarValores() {
+      document.getElementById("calculadora").style.display = 'none';
+      document.getElementById("valores").style.display = 'block';
+    }
+  </script>
+</body>
+</html>
