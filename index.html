@@ -1,253 +1,664 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
+<!doctype html>
+<html lang="pt-br">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Calculadora de Extras Militares</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mapa de Eventos – Carnaval 2026 (PB)</title>
+
+  <!-- Leaflet -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    crossorigin=""
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    crossorigin=""
+  ></script>
+
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-      background-color: #f5f5f5;
-      color: #2c3e50;
+    :root { --bg:#0b1220; --panel:#0f1a2e; --card:#132243; --muted:#9fb0d0; --text:#e7eefc; --accent:#6aa5ff; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); }
+
+    .app { display: grid; grid-template-columns: 380px 1fr; height: 100vh; position: relative; }
+    .sidebar { background: var(--panel); border-right: 1px solid rgba(255,255,255,.08); padding: 14px; overflow: auto; }
+    #map { width: 100%; height: 100vh; }
+
+    /* Botão flutuante para abrir/fechar filtros */
+    .panelToggle {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      z-index: 9999;
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(15,26,46,.82);
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      backdrop-filter: blur(6px);
     }
-    table {
+    .panelToggle:hover { background: rgba(15,26,46,.92); }
+    .panelToggle span { font-size: 20px; line-height: 1; }
+
+    .top { display:flex; align-items:center; justify-content:space-between; gap: 8px; margin-bottom: 12px; }
+    .title { font-size: 16px; font-weight: 700; letter-spacing:.2px; }
+    .hint { font-size: 12px; color: var(--muted); }
+
+    .filters { display: grid; gap: 10px; margin: 10px 0 14px; }
+    .row { display: grid; gap: 6px; }
+    label { font-size: 12px; color: var(--muted); }
+    input, select, button {
       width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 20px;
-      background-color: white;
+      padding: 10px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.04);
+      color: var(--text);
+      outline: none;
     }
-    th, td {
-      border: 1px solid #ccc;
-      padding: 8px;
-      text-align: center;
+    input::placeholder { color: rgba(231,238,252,.55); }
+    button {
+      background: rgba(106,165,255,.18);
+      border: 1px solid rgba(106,165,255,.35);
+      cursor: pointer;
+      font-weight: 700;
     }
-    select, input[type=number] {
-      width: 100%;
+    button:hover { background: rgba(106,165,255,.26); }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
     }
-    .resultados {
-      margin-top: 20px;
+    .stat {
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 12px;
+      padding: 10px;
     }
-    nav {
-      margin-bottom: 20px;
+    .stat .k { font-size: 11px; color: var(--muted); }
+    .stat .v { font-size: 18px; font-weight: 800; margin-top: 4px; }
+
+    .list { display: grid; gap: 10px; }
+    .card {
+      background: var(--card);
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 14px;
+      padding: 12px;
     }
-    nav a {
-      margin-right: 10px;
-      text-decoration: none;
-      color: blue;
+    .card .line1 { display:flex; justify-content:space-between; gap: 10px; }
+    .badge { font-size: 11px; padding: 4px 8px; border-radius: 999px; background: rgba(106,165,255,.18); border: 1px solid rgba(106,165,255,.35); }
+    .city { font-size: 14px; font-weight: 800; }
+    .meta { margin-top: 6px; font-size: 12px; color: var(--muted); display:flex; gap: 10px; flex-wrap: wrap; }
+    .atr { margin-top: 8px; font-size: 12px; }
+    .atr ul { margin: 6px 0 0 18px; padding: 0; color: var(--text); }
+    .atr li { margin: 2px 0; }
+    .card a { color: var(--accent); text-decoration: none; font-weight: 700; }
+    .card a:hover { text-decoration: underline; }
+
+    /* Popups Leaflet */
+    .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+      background: #0f1a2e; color: #e7eefc; border: 1px solid rgba(255,255,255,.10);
     }
-    .fixar-container {
-      margin-bottom: 10px;
+    .leaflet-control-attribution { background: rgba(15,26,46,.75) !important; color: #e7eefc; }
+
+    /* MOBILE (padrão: mapa em cima, painel embaixo) */
+    @media (max-width: 960px) {
+      .app { grid-template-columns: 1fr; grid-template-rows: 52vh 48vh; }
+      .sidebar { border-right: none; border-top: 1px solid rgba(255,255,255,.08); }
+      #map { height: 52vh; }
+      .panelToggle { top: 12px; left: 12px; }
     }
-    .posto-multiplos {
-      display: flex;
-      gap: 5px;
-      margin-bottom: 5px;
-    }
-    .extras-dia {
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
+
+    /* ====== MODO RECOLHIDO (oculta o painel) ====== */
+    body.panel-collapsed .sidebar { display: none; }
+    body.panel-collapsed .app { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+    body.panel-collapsed #map { height: 100vh; }
+
+    /* Em desktop, quando recolhe: mapa ocupa tudo */
+    @media (min-width: 961px) {
+      body.panel-collapsed .app { grid-template-columns: 1fr; }
     }
   </style>
 </head>
+
 <body>
-  <nav>
-    <a href="#" onclick="mostrarCalculadora()">Calculadora</a>
-    <a href="#" onclick="mostrarValores()">Valores</a>
-  </nav>
+  <button class="panelToggle" id="panelToggle" type="button" aria-label="Abrir/Fechar filtros" title="Abrir/Fechar filtros">
+    <span id="panelToggleIcon">✕</span>
+  </button>
 
-  <div id="calculadora">
-    <h1>Calculadora de Extras</h1>
-    <label for="mes">Selecione o mês:</label>
-    <input type="month" id="mes" onchange="gerarTabela()">
+  <div class="app">
+    <div id="map"></div>
 
-    <div class="fixar-container">
-      <label for="postoFixo">Posto fixo para todos os dias:</label>
-      <select id="postoFixo" onchange="aplicarPostoFixo()">
-        <option value="">-- Não fixar --</option>
-      </select>
-    </div>
+    <aside class="sidebar" id="sidebar">
+      <div class="top">
+        <div>
+          <div class="title">Mapa Interativo – Eventos (Carnaval 2026 / PB)</div>
+          <div class="hint">Filtros por data, BPM, cidade e público. Ordene por público (desc). Clique nas cidades no mapa.</div>
+        </div>
+      </div>
 
-    <table id="tabelaExtras">
-      <thead>
-        <tr>
-          <th>Data</th>
-          <th>Dia da Semana</th>
-          <th>Postos e Quantidades</th>
-          <th>Majorar Dia?</th>
-          <th>Valores Unitários</th>
-          <th>Total Diário</th>
-          <th>Horas Extras</th>
-        </tr>
-      </thead>
-      <tbody>
-        <!-- Linhas serão geradas dinamicamente -->
-      </tbody>
-    </table>
+      <div class="filters">
+        <div class="row">
+          <label for="dateFilter">Filtrar por data (mostra todos os eventos do dia)</label>
+          <input id="dateFilter" type="date" />
+        </div>
 
-    <button onclick="calcularExtras()">Calcular Valores</button>
+        <div class="row">
+          <label for="bpmFilter">Filtrar por batalhão (BPM)</label>
+          <select id="bpmFilter">
+            <option value="">Todos os batalhões</option>
+          </select>
+        </div>
 
-    <div class="resultados">
-      <p><strong>Total Geral: R$ <span id="totalGeral">0,00</span></strong></p>
-      <p><strong>Total de Horas Extras: <span id="totalHorasExtras">0</span>h</strong></p>
-    </div>
-  </div>
+        <div class="row">
+          <label for="cityFilter">Filtrar por cidade (mostra todos os eventos da cidade)</label>
+          <select id="cityFilter">
+            <option value="">Todas as cidades</option>
+          </select>
+        </div>
 
-  <div id="valores" style="display:none">
-    <h2>Tabela de Valores por Posto</h2>
-    <pre id="tabelaValores">
-    const VALORES = {
-      "SD": { normal: 316.8, majorado: 411.84 },
-      "CB": { normal: 348.48, majorado: 453.12 },
-      "3º SGT": { normal: 383.28, majorado: 498.24 },
-      "2º SGT": { normal: 421.68, majorado: 548.16 },
-      "1º SGT": { normal: 463.92, majorado: 602.88 },
-      "ST": { normal: 510.24, majorado: 663.36 },
-      "ASP": { normal: 561.12, majorado: 729.6 },
-      "2º TEN": { normal: 617.28, majorado: 802.56 },
-      "1º TEN": { normal: 679.2, majorado: 882.72 },
-      "CAP": { normal: 746.88, majorado: 971.04 },
-      "MAJ": { normal: 821.76, majorado: 1068.24 },
-      "TC": { normal: 903.84, majorado: 1175.04 },
-      "CEL": { normal: 1129.92, majorado: 1468.8 }
-    };
-    </pre>
+        <div class="row">
+          <label for="minAudience">Público mínimo (estimativa)</label>
+          <input id="minAudience" type="number" min="0" step="100" placeholder="Ex.: 5000" />
+        </div>
+
+        <div class="row">
+          <label for="sortMode">Ordenação</label>
+          <select id="sortMode">
+            <option value="date">Por data (padrão)</option>
+            <option value="audience_desc">Por público (decrescente)</option>
+          </select>
+        </div>
+
+        <button id="clearBtn" type="button">Limpar filtros</button>
+      </div>
+
+      <section class="stats">
+        <div class="stat">
+          <div class="k">Eventos (filtrados)</div>
+          <div class="v" id="eventsCount">0</div>
+        </div>
+        <div class="stat">
+          <div class="k">Cidades (filtradas)</div>
+          <div class="v" id="citiesCount">0</div>
+        </div>
+      </section>
+
+      <section class="list" id="eventsList"></section>
+    </aside>
   </div>
 
   <script>
-    const VALORES = {
-      "SD": { normal: 316.8, majorado: 411.84 },
-      "CB": { normal: 348.48, majorado: 453.12 },
-      "3º SGT": { normal: 383.28, majorado: 498.24 },
-      "2º SGT": { normal: 421.68, majorado: 548.16 },
-      "1º SGT": { normal: 463.92, majorado: 602.88 },
-      "ST": { normal: 510.24, majorado: 663.36 },
-      "ASP": { normal: 561.12, majorado: 729.6 },
-      "2º TEN": { normal: 617.28, majorado: 802.56 },
-      "1º TEN": { normal: 679.2, majorado: 882.72 },
-      "CAP": { normal: 746.88, majorado: 971.04 },
-      "MAJ": { normal: 821.76, majorado: 1068.24 },
-      "TC": { normal: 903.84, majorado: 1175.04 },
-      "CEL": { normal: 1129.92, majorado: 1468.8 }
-    };
+    /**
+     * DATASET
+     * - bpm: "3º BPM", "6º BPM", etc.
+     * - dateISO: "YYYY-MM-DD"
+     * - city/state
+     * - attractions: array
+     * - audience: number | null
+     * - notes: nome do evento/observação curta (sem emprego policial)
+     */
+    const EVENTS = [
+      // ===== 3º BPM =====
+      { bpm:"3º BPM", dateISO:"2026-02-07", city:"Patos", state:"PB", attractions:["MICHELE ANDRADE","PSIRICO","RAI SAIA RODADA","RAMON SHNEIDER"], audience:40000, notes:"Carnaval 2026" },
+      { bpm:"3º BPM", dateISO:"2026-02-08", city:"Patos", state:"PB", attractions:["MICHELE ANDRADE","PSIRICO","RAI SAIA RODADA","RAMON SHNEIDER"], audience:40000, notes:"Carnaval 2026" },
 
-    function gerarTabela() {
-      const mes = document.getElementById("mes").value;
-      if (!mes) return;
+      { bpm:"3º BPM", dateISO:"2026-02-13", city:"Patos", state:"PB", attractions:["A DEFINIR (Liga dos Blocos de Carnaval de Patos)"], audience:5000, notes:"Carnaval 2026" },
+      { bpm:"3º BPM", dateISO:"2026-02-14", city:"Patos", state:"PB", attractions:["A DEFINIR (Liga dos Blocos de Carnaval de Patos)"], audience:5000, notes:"Carnaval 2026" },
+      { bpm:"3º BPM", dateISO:"2026-02-15", city:"Patos", state:"PB", attractions:["A DEFINIR (Liga dos Blocos de Carnaval de Patos)"], audience:5000, notes:"Carnaval 2026" },
+      { bpm:"3º BPM", dateISO:"2026-02-16", city:"Patos", state:"PB", attractions:["A DEFINIR (Liga dos Blocos de Carnaval de Patos)"], audience:5000, notes:"Carnaval 2026" },
+      { bpm:"3º BPM", dateISO:"2026-02-17", city:"Patos", state:"PB", attractions:["A DEFINIR (Liga dos Blocos de Carnaval de Patos)"], audience:5000, notes:"Carnaval 2026" },
 
-      const [ano, mesNum] = mes.split("-");
-      const ultimoDia = new Date(ano, mesNum, 0).getDate();
-      const tbody = document.querySelector("#tabelaExtras tbody");
-      tbody.innerHTML = "";
+      { bpm:"3º BPM", dateISO:"2026-02-14", city:"Areia de Baraúnas", state:"PB", attractions:["A definir"], audience:2000, notes:"Carnaval (Distrito de Bananeiras)" },
+      { bpm:"3º BPM", dateISO:"2026-02-15", city:"Areia de Baraúnas", state:"PB", attractions:["A definir"], audience:2000, notes:"Carnaval" },
+      { bpm:"3º BPM", dateISO:"2026-02-16", city:"Areia de Baraúnas", state:"PB", attractions:["A definir"], audience:2000, notes:"Carnaval" },
+      { bpm:"3º BPM", dateISO:"2026-02-17", city:"Areia de Baraúnas", state:"PB", attractions:["A definir"], audience:2000, notes:"Carnaval" },
 
-      const postoFixoSelect = document.getElementById("postoFixo");
-      postoFixoSelect.innerHTML = '<option value="">-- Não fixar --</option>';
-      Object.keys(VALORES).forEach(p => {
+      { bpm:"3º BPM", dateISO:"2026-02-14", city:"São José do Sabugi", state:"PB", attractions:["Sem palco (previsão apenas de Charangas)"], audience:1000, notes:"São José Folia" },
+      { bpm:"3º BPM", dateISO:"2026-02-15", city:"São José do Sabugi", state:"PB", attractions:["Sem palco (previsão apenas de Charangas)"], audience:1000, notes:"São José Folia" },
+      { bpm:"3º BPM", dateISO:"2026-02-16", city:"São José do Sabugi", state:"PB", attractions:["Sem palco (previsão apenas de Charangas)"], audience:2000, notes:"São José Folia" },
+      { bpm:"3º BPM", dateISO:"2026-02-17", city:"São José do Sabugi", state:"PB", attractions:["Sem palco (previsão apenas de Charangas)"], audience:1000, notes:"São José Folia" },
+
+      { bpm:"3º BPM", dateISO:"2026-02-14", city:"Junco do Seridó", state:"PB", attractions:["A definir"], audience:2000, notes:"Carnaval" },
+      { bpm:"3º BPM", dateISO:"2026-02-15", city:"Junco do Seridó", state:"PB", attractions:["A definir"], audience:2000, notes:"Carnaval" },
+      { bpm:"3º BPM", dateISO:"2026-02-16", city:"Junco do Seridó", state:"PB", attractions:["A definir"], audience:2000, notes:"Carnaval" },
+      { bpm:"3º BPM", dateISO:"2026-02-17", city:"Junco do Seridó", state:"PB", attractions:["A definir"], audience:2000, notes:"Carnaval" },
+
+      { bpm:"3º BPM", dateISO:"2026-02-14", city:"São Mamede", state:"PB", attractions:["Locais"], audience:2000, notes:"Carnaval" },
+
+      { bpm:"3º BPM", dateISO:"2026-02-15", city:"Santa Luzia", state:"PB", attractions:["A definir"], audience:8000, notes:"Carnaval" },
+      { bpm:"3º BPM", dateISO:"2026-02-16", city:"Santa Luzia", state:"PB", attractions:["A definir"], audience:8000, notes:"Carnaval" },
+      { bpm:"3º BPM", dateISO:"2026-02-17", city:"Santa Luzia", state:"PB", attractions:["A definir"], audience:8000, notes:"Carnaval" },
+
+      { bpm:"3º BPM", dateISO:"2026-02-15", city:"Várzea", state:"PB", attractions:["Locais"], audience:2000, notes:"Carnaval" },
+      { bpm:"3º BPM", dateISO:"2026-02-17", city:"Quixaba", state:"PB", attractions:["A definir"], audience:2000, notes:"Carnaval" },
+
+      // ===== 6º BPM =====
+      { bpm:"6º BPM", dateISO:"2026-02-07", city:"Bonito de Santa Fé", state:"PB", attractions:["Trio Elétrico e Banda"], audience:5000, notes:"Prévia Carnavalesca" },
+
+      { bpm:"6º BPM", dateISO:"2026-02-12", city:"Cajazeiras", state:"PB", attractions:["Claudia Leite","Matuê","Luiza Nobre","Bloco das Escolas"], audience:40000, notes:"Carnaval Cajazeiras" },
+      { bpm:"6º BPM", dateISO:"2026-02-13", city:"Cajazeiras", state:"PB", attractions:["Eric Land","Fernandinha","Anderson Neiff","Tikinho Pankadão","Bloco dos Imprensados"], audience:40000, notes:"Carnaval Cajazeiras" },
+      { bpm:"6º BPM", dateISO:"2026-02-14", city:"Cajazeiras", state:"PB", attractions:["Collo de Menina","Luan Pakerô","Bloco das Virgens"], audience:30000, notes:"Carnaval Cajazeiras" },
+      { bpm:"6º BPM", dateISO:"2026-02-15", city:"Cajazeiras", state:"PB", attractions:["Michelle Andrade","Rafa e Pipo","Biguinho Show","Bloco UNIFSM"], audience:30000, notes:"Carnaval Cajazeiras" },
+      { bpm:"6º BPM", dateISO:"2026-02-16", city:"Cajazeiras", state:"PB", attractions:["Lipe Lucena","Bonde do Brasil","Gilson Mania","Bloco Cafuçu"], audience:30000, notes:"Carnaval Cajazeiras" },
+      { bpm:"6º BPM", dateISO:"2026-02-17", city:"Cajazeiras", state:"PB", attractions:["Psirico","Flavinho Pisada Quente","Judimar Dias","Bloco Din Din de Cajá"], audience:30000, notes:"Carnaval Cajazeiras" },
+
+      { bpm:"6º BPM", dateISO:"2026-02-13", city:"Uiraúna", state:"PB", attractions:["CELIA MELO","NAGIBE","ERICK LAND"], audience:20000, notes:"UNA FREVO" },
+      { bpm:"6º BPM", dateISO:"2026-02-14", city:"Uiraúna", state:"PB", attractions:["ORQUESTRA FREVANÇA","LUANA FREITAS","OLODUM"], audience:20000, notes:"UNA FREVO" },
+      { bpm:"6º BPM", dateISO:"2026-02-15", city:"Uiraúna", state:"PB", attractions:["ORQUESTRA FREVUNA","POPÓ SILVA","MICHELE ANDRADE"], audience:20000, notes:"UNA FREVO" },
+      { bpm:"6º BPM", dateISO:"2026-02-16", city:"Uiraúna", state:"PB", attractions:["ORQUESTRA UIRAUNENSE DE FREVO","LUCAS SOARES","BANDA INALA","BONDE DO BRASIL"], audience:20000, notes:"UNA FREVO" },
+      { bpm:"6º BPM", dateISO:"2026-02-17", city:"Uiraúna", state:"PB", attractions:["ORQUESTRA TROPICANA","FALVIO PISADA QUENTE","ALINE REIS","DAN VENTURA"], audience:20000, notes:"UNA FREVO" },
+
+      { bpm:"6º BPM", dateISO:"2026-02-14", city:"Santa Helena", state:"PB", attractions:["Axé Meu Rei","Banda Nagibe","Orquestra Tropicana"], audience:2000, notes:"Carna Santa Helena" },
+      { bpm:"6º BPM", dateISO:"2026-02-15", city:"Santa Helena", state:"PB", attractions:["Lucas Gomes","Bonde do Brasil","Biguinho Show"], audience:2000, notes:"Carna Santa Helena" },
+      { bpm:"6º BPM", dateISO:"2026-02-16", city:"Santa Helena", state:"PB", attractions:["Orquestra Frevuna","Pedrinho Pegação","Luan Pakerô"], audience:2000, notes:"Carna Santa Helena" },
+      { bpm:"6º BPM", dateISO:"2026-02-17", city:"Santa Helena", state:"PB", attractions:["Gilson Mania","Luiza Nobre","Popó Silva"], audience:2000, notes:"Carna Santa Helena" },
+
+      { bpm:"6º BPM", dateISO:"2026-02-14", city:"Bom Jesus", state:"PB", attractions:["A confirmar"], audience:800, notes:"CRAS Folia" },
+      { bpm:"6º BPM", dateISO:"2026-02-15", city:"Bom Jesus", state:"PB", attractions:["A confirmar"], audience:1000, notes:"61ª Corrida de Jegue / Encontro dos Blocos (manhã)" },
+      { bpm:"6º BPM", dateISO:"2026-02-15", city:"Bom Jesus", state:"PB", attractions:["A confirmar"], audience:1000, notes:"Encontro dos Blocos (noite)" },
+
+      // ===== 12º BPM =====
+      { bpm:"12º BPM", dateISO:"2026-01-30", city:"Brejo do Cruz", state:"PB", attractions:["PAULINHO CACHORRÃO"], audience:2000, notes:"Brejo Folia" },
+      { bpm:"12º BPM", dateISO:"2026-01-31", city:"Brejo do Cruz", state:"PB", attractions:["THIAGUINHO","SWING MASSA"], audience:2000, notes:"Brejo Folia" },
+      { bpm:"12º BPM", dateISO:"2026-02-01", city:"Brejo do Cruz", state:"PB", attractions:["MANU ARROCHARME"], audience:2500, notes:"Brejo Folia (Arrastão das Virgens)" },
+
+      { bpm:"12º BPM", dateISO:"2026-02-13", city:"Catolé do Rocha", state:"PB", attractions:["AGUARDANDO PROGRAMAÇÃO"], audience:3000, notes:"Carnaval Catolé (Infantil/Melhor Idade)" },
+      { bpm:"12º BPM", dateISO:"2026-02-14", city:"Catolé do Rocha", state:"PB", attractions:["AGUARDANDO PROGRAMAÇÃO"], audience:20000, notes:"Carnaval Catolé" },
+      { bpm:"12º BPM", dateISO:"2026-02-15", city:"Catolé do Rocha", state:"PB", attractions:["AGUARDANDO PROGRAMAÇÃO"], audience:20000, notes:"Carnaval Catolé" },
+      { bpm:"12º BPM", dateISO:"2026-02-16", city:"Catolé do Rocha", state:"PB", attractions:["AGUARDANDO PROGRAMAÇÃO"], audience:20000, notes:"Carnaval Catolé" },
+      { bpm:"12º BPM", dateISO:"2026-02-17", city:"Catolé do Rocha", state:"PB", attractions:["AGUARDANDO PROGRAMAÇÃO"], audience:20000, notes:"Carnaval Catolé" },
+
+      { bpm:"12º BPM", dateISO:"2026-02-14", city:"Paulista", state:"PB", attractions:["AGUARDANDO PROGRAMAÇÃO"], audience:1000, notes:"Carnaval Molhado" },
+      { bpm:"12º BPM", dateISO:"2026-02-15", city:"Paulista", state:"PB", attractions:["AGUARDANDO PROGRAMAÇÃO"], audience:1000, notes:"Carnaval Molhado" },
+      { bpm:"12º BPM", dateISO:"2026-02-16", city:"Paulista", state:"PB", attractions:["AGUARDANDO PROGRAMAÇÃO"], audience:1000, notes:"Carnaval Molhado" },
+      { bpm:"12º BPM", dateISO:"2026-02-18", city:"Paulista", state:"PB", attractions:["AGUARDANDO PROGRAMAÇÃO"], audience:1000, notes:"Carnaval Molhado" },
+
+      // ===== 13º BPM =====
+      { bpm:"13º BPM", dateISO:"2026-02-14", city:"Coremas", state:"PB", attractions:[
+        "13:00 Axé Zueira – Rio Turbina",
+        "17:00 Athyrson – Bar do Peixe",
+        "20:30 Orquestra – Praça Central",
+        "22:00 Leozinho",
+        "23:00 Wallas Arrais",
+        "01:00 Gil Bala",
+        "DJ Kauã (intervalos)"
+      ], audience:25000, notes:"Carnaval Molhado" },
+      { bpm:"13º BPM", dateISO:"2026-02-15", city:"Coremas", state:"PB", attractions:[
+        "13:00 Hidel – Rio Turbina",
+        "16:30 Vavá Vaneirão – Bar do Peixe",
+        "18:00 Felipe Mayke",
+        "21:00 Axé Zueira – Praça Central",
+        "23:00 Limão com Mel",
+        "01:00 Pedrinho Pegação",
+        "DJ Kauã (intervalos)"
+      ], audience:25000, notes:"Carnaval Molhado" },
+      { bpm:"13º BPM", dateISO:"2026-02-16", city:"Coremas", state:"PB", attractions:[
+        "13:00 Sagaz – Rio Turbina",
+        "17:00 Vavá Vaneirão – Pôr do Sol",
+        "18:00 Banda Liryus – Bar do Peixe",
+        "18:00 Matinê – Praça Central",
+        "20:30 Hidel",
+        "23:30 Sanara Show",
+        "01:00 Luka Bass"
+      ], audience:25000, notes:"Carnaval Molhado" },
+      { bpm:"13º BPM", dateISO:"2026-02-17", city:"Coremas", state:"PB", attractions:[
+        "13:00 Karlinhos – Rio Turbina",
+        "16:00 Hidel – Pôr do Sol",
+        "16:30 Edu Alves – Bar do Peixe",
+        "18:00 Axé Zueira",
+        "21:00 El Sombreiro – Praça Central",
+        "23:00 Liton Liz",
+        "01:00 Gilson Mania"
+      ], audience:25000, notes:"Carnaval Molhado" },
+
+      { bpm:"13º BPM", dateISO:"2026-02-14", city:"Conceição", state:"PB", attractions:["Concentração de blocos carnavalescos","Arrastão de blocos pelas ruas","Caminhão Conceito"], audience:4500, notes:"Carnaval de Conceição" },
+      { bpm:"13º BPM", dateISO:"2026-02-15", city:"Conceição", state:"PB", attractions:["Concentração de blocos carnavalescos","Arrastão de blocos pelas ruas","Caminhão Conceito"], audience:4500, notes:"Carnaval de Conceição" },
+      { bpm:"13º BPM", dateISO:"2026-02-16", city:"Conceição", state:"PB", attractions:["Concentração de blocos carnavalescos","Arrastão de blocos pelas ruas","Caminhão Conceito"], audience:4500, notes:"Carnaval de Conceição" },
+      { bpm:"13º BPM", dateISO:"2026-02-17", city:"Conceição", state:"PB", attractions:["Concentração de blocos carnavalescos","Arrastão de blocos pelas ruas","Caminhão Conceito"], audience:4500, notes:"Carnaval de Conceição" },
+
+      { bpm:"13º BPM", dateISO:"2026-02-14", city:"Ibiara", state:"PB", attractions:["Nagibe","Marcos Sousa","DJ Kler"], audience:3000, notes:"Carnaval de Ibiara" },
+      { bpm:"13º BPM", dateISO:"2026-02-15", city:"Ibiara", state:"PB", attractions:["Ramon Shinayder","Lukka Bass","Athysson César"], audience:3000, notes:"Carnaval de Ibiara" },
+      { bpm:"13º BPM", dateISO:"2026-02-16", city:"Ibiara", state:"PB", attractions:["A definir"], audience:3000, notes:"Carnaval de Ibiara" },
+      { bpm:"13º BPM", dateISO:"2026-02-17", city:"Ibiara", state:"PB", attractions:["Ranieri Gomes","DJ Kler","Top 02"], audience:3000, notes:"Carnaval de Ibiara" },
+
+      { bpm:"13º BPM", dateISO:"2026-02-14", city:"Itaporanga", state:"PB", attractions:["Blocos locais (som mecânico)"], audience:1000, notes:"Blocos Carnavalescos" },
+      { bpm:"13º BPM", dateISO:"2026-02-15", city:"Itaporanga", state:"PB", attractions:["Blocos locais (som mecânico)"], audience:1000, notes:"Blocos Carnavalescos" },
+      { bpm:"13º BPM", dateISO:"2026-02-16", city:"Itaporanga", state:"PB", attractions:["Blocos locais (som mecânico)"], audience:1000, notes:"Blocos Carnavalescos" },
+      { bpm:"13º BPM", dateISO:"2026-02-17", city:"Itaporanga", state:"PB", attractions:["Blocos locais (som mecânico)"], audience:1000, notes:"Blocos Carnavalescos" },
+
+      { bpm:"13º BPM", dateISO:"2026-02-14", city:"Piancó", state:"PB", attractions:["A definir"], audience:null, notes:"Carnaval de Piancó" },
+      { bpm:"13º BPM", dateISO:"2026-02-15", city:"Piancó", state:"PB", attractions:["A definir"], audience:null, notes:"Carnaval de Piancó" },
+      { bpm:"13º BPM", dateISO:"2026-02-16", city:"Piancó", state:"PB", attractions:["A definir"], audience:null, notes:"Carnaval de Piancó" },
+      { bpm:"13º BPM", dateISO:"2026-02-17", city:"Piancó", state:"PB", attractions:["A definir"], audience:null, notes:"Carnaval de Piancó" },
+
+      { bpm:"13º BPM", dateISO:"2026-02-15", city:"Santana dos Garrotes", state:"PB", attractions:["ITALO (Orquestra de Frevo)","DJ Kler"], audience:1000, notes:"Carnaval" },
+      { bpm:"13º BPM", dateISO:"2026-02-16", city:"Santana dos Garrotes", state:"PB", attractions:["ITALO (Orquestra de Frevo)","DJ Kler"], audience:1000, notes:"Carnaval" },
+
+      // ===== 14º BPM (Sousa / Sorri Folia) =====
+      { bpm:"14º BPM", dateISO:"2026-02-07", city:"Sousa", state:"PB", attractions:["Raí Saia Rodada","Grafith","Gilson Mania"], audience:10000, notes:"Baile Verde e Branco (Campestre Clube)" },
+      { bpm:"14º BPM", dateISO:"2026-02-11", city:"Sousa", state:"PB", attractions:["Aline Reis"], audience:10000, notes:"Sorri Folia 2026 (Bloco Virgens Jurássicas)" },
+
+      { bpm:"14º BPM", dateISO:"2026-02-15", city:"São Gonçalo", state:"PB", attractions:["JM Puxado","Orquestra Sertão Veredas","Zazuêta"], audience:5000, notes:"Sorri Folia 2026" },
+      { bpm:"14º BPM", dateISO:"2026-02-15", city:"Sousa", state:"PB", attractions:["Orquestra Tropicana","Alex Samba","Spydo Rey"], audience:1000, notes:"Sorri Folia 2026 (Clube Enéas Preto)" },
+      { bpm:"14º BPM", dateISO:"2026-02-15", city:"Nazarezinho", state:"PB", attractions:["Não divulgada"], audience:2000, notes:"Carnaval de Rua 2026" },
+
+      { bpm:"14º BPM", dateISO:"2026-02-16", city:"São Gonçalo", state:"PB", attractions:["Banda Inala","Breno Andrade","Orquestra Frevura"], audience:5000, notes:"Sorri Folia 2026" },
+      { bpm:"14º BPM", dateISO:"2026-02-16", city:"Sousa", state:"PB", attractions:["Não divulgada"], audience:1000, notes:"Sorri Folia 2026 (Clube Enéas Preto)" },
+
+      { bpm:"14º BPM", dateISO:"2026-02-17", city:"Nazarezinho", state:"PB", attractions:["Não divulgada"], audience:2000, notes:"Carnaval de Rua 2026" },
+      { bpm:"14º BPM", dateISO:"2026-02-17", city:"São Gonçalo", state:"PB", attractions:["Lucas Tô de Boa","Rekebrança","Lucas Soares"], audience:5000, notes:"Sorri Folia 2026" },
+      { bpm:"14º BPM", dateISO:"2026-02-17", city:"Sousa", state:"PB", attractions:["Orquestra Frevura","Lucas Gomes"], audience:1000, notes:"Sorri Folia 2026 (Clube Enéas Preto)" },
+
+      { bpm:"14º BPM", dateISO:"2026-02-21", city:"Sousa", state:"PB", attractions:["Ainda não divulgadas"], audience:10000, notes:"Bloco de Rua: É Mole, Mas É Meu" },
+
+      // ===== 20º BPM =====
+      { bpm:"20º BPM", dateISO:"2026-02-13", city:"Princesa Isabel", state:"PB", attractions:["Harmonia Frevo","Galo do Maia","Gisele Sousa","Feitiço de Menina","Wellington Stilo"], audience:5000, notes:"Carnaval de Princesa" },
+      { bpm:"20º BPM", dateISO:"2026-02-14", city:"Princesa Isabel", state:"PB", attractions:["Harmonia Frevo e Gil Cantor","Trio Elétrico (Bloco das Virgens)","Wallas Arrais","Lipe Lucena","Efrem"], audience:6000, notes:"Carnaval de Princesa" },
+      { bpm:"20º BPM", dateISO:"2026-02-15", city:"Princesa Isabel", state:"PB", attractions:["Dodô Pressão","Ramon Schnayder","Lukas Bass","Hadriel"], audience:6000, notes:"Carnaval de Princesa" },
+      { bpm:"20º BPM", dateISO:"2026-02-16", city:"Princesa Isabel", state:"PB", attractions:["Alberto Bakana","Rafale Dono","Walter Lima","Grupo Meu Seu"], audience:5000, notes:"Carnaval de Princesa" },
+      { bpm:"20º BPM", dateISO:"2026-02-17", city:"Princesa Isabel", state:"PB", attractions:["Michel Brocador","Lito Lins","Everton Freitas","Klebin"], audience:5000, notes:"Carnaval de Princesa" },
+
+      { bpm:"20º BPM", dateISO:"2026-02-15", city:"Tavares", state:"PB", attractions:["Trio Elétrico (Bloco das Só Nois / Wellington Stilo)"], audience:2000, notes:"Carnaval de Tavares" },
+      { bpm:"20º BPM", dateISO:"2026-02-16", city:"Água Branca", state:"PB", attractions:["Trio Elétrico (Bloco das Virgens)"], audience:2000, notes:"Carnaval de Água Branca" },
+    ];
+
+    // ===== helpers =====
+    const GEO_CACHE_KEY = "geo_cache_v1";
+    const geoCache = JSON.parse(localStorage.getItem(GEO_CACHE_KEY) || "{}");
+
+    async function geocodeCity(city, state="PB") {
+      const key = `${city}-${state}`;
+      if (geoCache[key]) return geoCache[key];
+
+      const q = encodeURIComponent(`${city}, ${state}, Brasil`);
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${q}`;
+
+      const res = await fetch(url, { headers: { "Accept": "application/json" } });
+      if (!res.ok) throw new Error("Falha no geocoding");
+      const data = await res.json();
+      if (!data?.length) throw new Error(`Cidade não encontrada: ${city}`);
+
+      const lat = parseFloat(data[0].lat);
+      const lon = parseFloat(data[0].lon);
+
+      geoCache[key] = { lat, lon };
+      localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(geoCache));
+      return { lat, lon };
+    }
+
+    function toBRDate(iso) {
+      const [y,m,d] = iso.split("-");
+      return `${d}/${m}/${y}`;
+    }
+
+    function formatAudience(n) {
+      if (n === null || n === undefined || Number.isNaN(n)) return "Não informado";
+      return n.toLocaleString("pt-BR");
+    }
+
+    function unique(arr) { return Array.from(new Set(arr)); }
+
+    function escapeHTML(str) {
+      return String(str)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    // ===== map =====
+    const map = L.map("map").setView([-7.0, -37.3], 7);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap",
+    }).addTo(map);
+
+    const markersLayer = L.layerGroup().addTo(map);
+    const markersByCity = new Map();
+
+    // ===== UI =====
+    const dateFilter = document.getElementById("dateFilter");
+    const bpmFilter = document.getElementById("bpmFilter");
+    const cityFilter = document.getElementById("cityFilter");
+    const minAudience = document.getElementById("minAudience");
+    const sortMode = document.getElementById("sortMode");
+    const clearBtn = document.getElementById("clearBtn");
+    const eventsList = document.getElementById("eventsList");
+    const eventsCount = document.getElementById("eventsCount");
+    const citiesCount = document.getElementById("citiesCount");
+
+    const panelToggle = document.getElementById("panelToggle");
+    const panelToggleIcon = document.getElementById("panelToggleIcon");
+
+    // Toggle painel
+    function setPanelCollapsed(isCollapsed) {
+      document.body.classList.toggle("panel-collapsed", isCollapsed);
+      panelToggleIcon.textContent = isCollapsed ? "☰" : "✕";
+      localStorage.setItem("panel_collapsed", isCollapsed ? "1" : "0");
+      // Recalcular o mapa ao mudar layout
+      setTimeout(() => map.invalidateSize(), 150);
+    }
+
+    panelToggle.addEventListener("click", () => {
+      const now = document.body.classList.contains("panel-collapsed");
+      setPanelCollapsed(!now);
+    });
+
+    function populateBpmDropdown() {
+      const bpms = unique(EVENTS.map(e => e.bpm).filter(Boolean))
+        .sort((a,b) => a.localeCompare(b));
+      for (const b of bpms) {
         const opt = document.createElement("option");
-        opt.value = p;
-        opt.textContent = p;
-        postoFixoSelect.appendChild(opt);
-      });
-
-      for (let dia = 10; dia <= ultimoDia; dia++) {
-        const data = new Date(ano, mesNum - 1, dia);
-        const diaSemana = data.toLocaleDateString('pt-BR', { weekday: 'long' });
-
-        const linha = document.createElement("tr");
-        const options = Object.keys(VALORES).map(p => `<option value="${p}">${p}</option>`).join('');
-
-        linha.innerHTML = `
-          <td>${data.toLocaleDateString()}</td>
-          <td>${diaSemana}</td>
-          <td>
-            <div class="extras-dia">
-              <div class="posto-multiplos">
-                <select class="posto">${options}</select>
-                <input type="number" min="0" value="0" class="qtdExtras">
-                <button type="button" onclick="adicionarPosto(this)">+</button>
-              </div>
-            </div>
-          </td>
-          <td><input type="checkbox" class="majorarDia"></td>
-          <td class="valorUnitario">-</td>
-          <td class="totalDia">-</td>
-          <td class="horasExtras">-</td>
-        `;
-
-        tbody.appendChild(linha);
+        opt.value = b;
+        opt.textContent = b;
+        bpmFilter.appendChild(opt);
       }
     }
 
-    function adicionarPosto(botao) {
-      const container = botao.closest(".extras-dia");
-      const div = document.createElement("div");
-      div.className = "posto-multiplos";
-      div.innerHTML = `
-        <select class="posto">${Object.keys(VALORES).map(p => `<option value="${p}">${p}</option>`).join('')}</select>
-        <input type="number" min="0" value="0" class="qtdExtras">
-        <button type="button" onclick="this.parentElement.remove()">–</button>
-      `;
-      container.appendChild(div);
+    function populateCityDropdown() {
+      const cities = unique(EVENTS.map(e => e.city)).sort((a,b) => a.localeCompare(b));
+      for (const c of cities) {
+        const opt = document.createElement("option");
+        opt.value = c;
+        opt.textContent = c;
+        cityFilter.appendChild(opt);
+      }
     }
 
-    function aplicarPostoFixo() {
-      const valorSelecionado = document.getElementById("postoFixo").value;
-      if (!valorSelecionado) return;
-      document.querySelectorAll("select.posto").forEach(select => {
-        select.value = valorSelecionado;
+    function getFilteredEvents() {
+      const d = dateFilter.value || "";
+      const b = bpmFilter.value || "";
+      const c = cityFilter.value || "";
+      const min = minAudience.value ? Number(minAudience.value) : null;
+
+      return EVENTS.filter(e => {
+        if (d && e.dateISO !== d) return false;
+        if (b && e.bpm !== b) return false;
+        if (c && e.city !== c) return false;
+        if (min !== null) {
+          if (e.audience === null || e.audience === undefined) return false;
+          if (Number(e.audience) < min) return false;
+        }
+        return true;
       });
     }
 
-    function calcularExtras() {
-      const linhas = document.querySelectorAll("#tabelaExtras tbody tr");
-      let totalGeral = 0;
-      let totalHoras = 0;
+    function sortEvents(list) {
+      const mode = sortMode.value || "date";
+      const arr = list.slice();
 
-      linhas.forEach(linha => {
-        const isMajorado = linha.querySelector(".majorarDia").checked;
-        const diaSemana = linha.cells[1].innerText;
-        const isFds = diaSemana.includes("sábado") || diaSemana.includes("domingo");
-        const usarMajorado = isFds || isMajorado;
+      if (mode === "audience_desc") {
+        arr.sort((a,b) => {
+          const aa = (a.audience === null || a.audience === undefined) ? -1 : Number(a.audience);
+          const bb = (b.audience === null || b.audience === undefined) ? -1 : Number(b.audience);
+          if (bb !== aa) return bb - aa; // desc
+          const dc = a.dateISO.localeCompare(b.dateISO);
+          if (dc !== 0) return dc;
+          return a.city.localeCompare(b.city);
+        });
+        return arr;
+      }
 
-        const grupo = linha.querySelectorAll(".posto-multiplos");
-        let totalDia = 0;
-        let horasExtras = 0;
-        let textoValores = [];
+      // default: date
+      arr.sort((a,b) => {
+        const dc = a.dateISO.localeCompare(b.dateISO);
+        if (dc !== 0) return dc;
+        const cc = a.city.localeCompare(b.city);
+        if (cc !== 0) return cc;
+        const aa = (a.audience === null || a.audience === undefined) ? -1 : Number(a.audience);
+        const bb = (b.audience === null || b.audience === undefined) ? -1 : Number(b.audience);
+        return bb - aa;
+      });
+      return arr;
+    }
 
-        grupo.forEach(g => {
-          const posto = g.querySelector(".posto").value;
-          const qtd = parseInt(g.querySelector(".qtdExtras").value) || 0;
-          const valor = usarMajorado ? VALORES[posto].majorado : VALORES[posto].normal;
+    function buildPopupHTML(city, cityEvents) {
+      const sorted = sortEvents(cityEvents);
+      const items = sorted.map(e => {
+        const atr = (e.attractions?.length
+          ? `<ul>${e.attractions.map(x => `<li>${escapeHTML(x)}</li>`).join("")}</ul>`
+          : "<em>Sem atrações informadas</em>"
+        );
 
-          if (qtd > 0) {
-            totalDia += valor * qtd;
-            horasExtras += qtd * 24;
-            textoValores.push(`${qtd} x ${posto} (R$ ${valor.toFixed(2)})`);
+        return `
+          <div style="margin:10px 0; padding:10px; border:1px solid rgba(255,255,255,.10); border-radius:12px; background:rgba(255,255,255,.03)">
+            <div style="display:flex; justify-content:space-between; gap:10px;">
+              <strong>${escapeHTML(city)}</strong>
+              <span style="opacity:.85">${toBRDate(e.dateISO)}</span>
+            </div>
+            <div style="margin-top:6px; font-size:12px; opacity:.85">
+              <div><strong>BPM:</strong> ${escapeHTML(e.bpm || "—")}</div>
+              <div><strong>Público:</strong> ${formatAudience(e.audience)}</div>
+              ${e.notes ? `<div><strong>Evento:</strong> ${escapeHTML(e.notes)}</div>` : ""}
+            </div>
+            <div style="margin-top:8px; font-size:12px;">
+              <strong>Atrações:</strong>
+              ${atr}
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      return `
+        <div style="min-width:280px">
+          <div style="font-weight:800; font-size:14px; margin-bottom:6px">${escapeHTML(city)} (eventos)</div>
+          ${items || "<em>Nenhum evento para os filtros atuais.</em>"}
+        </div>
+      `;
+    }
+
+    async function buildMarkers(events) {
+      markersLayer.clearLayers();
+      markersByCity.clear();
+
+      const cities = unique(events.map(e => `${e.city}|${e.state}`));
+      for (const cs of cities) {
+        const [city, state] = cs.split("|");
+        try {
+          const { lat, lon } = await geocodeCity(city, state);
+          const marker = L.marker([lat, lon]).addTo(markersLayer);
+          markersByCity.set(city, marker);
+
+          marker.on("click", () => {
+            const cityEvents = getFilteredEvents().filter(e => e.city === city);
+            const html = buildPopupHTML(city, cityEvents);
+            marker.bindPopup(html, { maxWidth: 360 }).openPopup();
+          });
+        } catch (err) {
+          console.warn(err);
+        }
+      }
+    }
+
+    function renderList(filtered) {
+      eventsList.innerHTML = "";
+      const sorted = sortEvents(filtered);
+
+      for (const e of sorted) {
+        const card = document.createElement("div");
+        card.className = "card";
+
+        const atrList = (e.attractions?.length)
+          ? `<ul>${e.attractions.map(x => `<li>${escapeHTML(x)}</li>`).join("")}</ul>`
+          : `<em>Sem atrações informadas</em>`;
+
+        card.innerHTML = `
+          <div class="line1">
+            <div class="city">${escapeHTML(e.city)} – ${escapeHTML(e.state)}</div>
+            <div class="badge">${toBRDate(e.dateISO)}</div>
+          </div>
+          <div class="meta">
+            ${e.bpm ? `<span><strong>BPM:</strong> ${escapeHTML(e.bpm)}</span>` : ""}
+            <span><strong>Público:</strong> ${formatAudience(e.audience)}</span>
+            ${e.notes ? `<span><strong>Evento:</strong> ${escapeHTML(e.notes)}</span>` : ""}
+          </div>
+          <div class="atr">
+            <strong>Atrações:</strong>
+            ${atrList}
+          </div>
+          <div style="margin-top:10px;">
+            <a href="#" data-city="${escapeHTML(e.city)}">Ver no mapa</a>
+          </div>
+        `;
+
+        card.querySelector("a").addEventListener("click", (ev) => {
+          ev.preventDefault();
+          const city = e.city;
+          const marker = markersByCity.get(city);
+          if (marker) {
+            map.setView(marker.getLatLng(), 12, { animate: true });
+            marker.fire("click");
+          } else {
+            alert("Ainda não consegui localizar essa cidade no mapa. (Geocoding falhou)");
           }
         });
 
-        linha.querySelector(".valorUnitario").innerText = textoValores.join("\n");
-        linha.querySelector(".totalDia").innerText = `R$ ${totalDia.toFixed(2)}`;
-        linha.querySelector(".horasExtras").innerText = `${horasExtras}h`;
+        eventsList.appendChild(card);
+      }
 
-        totalGeral += totalDia;
-        totalHoras += horasExtras;
-      });
-
-      document.getElementById("totalGeral").innerText = totalGeral.toFixed(2);
-      document.getElementById("totalHorasExtras").innerText = totalHoras;
+      eventsCount.textContent = String(filtered.length);
+      citiesCount.textContent = String(unique(filtered.map(e => e.city)).length);
     }
 
-    function mostrarCalculadora() {
-      document.getElementById("calculadora").style.display = 'block';
-      document.getElementById("valores").style.display = 'none';
+    function refresh() {
+      const filtered = getFilteredEvents();
+      renderList(filtered);
+      // Popups atualizam ao clicar (porque usam getFilteredEvents + sortMode)
     }
 
-    function mostrarValores() {
-      document.getElementById("calculadora").style.display = 'none';
-      document.getElementById("valores").style.display = 'block';
-    }
+    clearBtn.addEventListener("click", () => {
+      dateFilter.value = "";
+      bpmFilter.value = "";
+      cityFilter.value = "";
+      minAudience.value = "";
+      sortMode.value = "date";
+      refresh();
+    });
+
+    dateFilter.addEventListener("change", refresh);
+    bpmFilter.addEventListener("change", refresh);
+    cityFilter.addEventListener("change", refresh);
+    minAudience.addEventListener("input", refresh);
+    sortMode.addEventListener("change", refresh);
+
+    // init
+    populateBpmDropdown();
+    populateCityDropdown();
+    refresh();
+    buildMarkers(EVENTS);
+
+    // Restaurar estado do painel
+    const saved = localStorage.getItem("panel_collapsed");
+    setPanelCollapsed(saved === "1");
   </script>
 </body>
 </html>
